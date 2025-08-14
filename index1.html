@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAE Task Card App - Batik Air Theme</title>
+<style>
+:root {
+  --bg:#f5f5f5;
+  --panel:#003366;
+  --accent:#00a1e4;
+  --danger:#ff4d4f;
+  --text:#111;
+  --muted:#555;
+  --card:#ffffff;
+}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text);}
+.container{max-width:1000px;margin:auto;padding:20px;}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+h1{color:var(--panel);}
+.pill{padding:6px 12px;border-radius:20px;background:var(--accent);color:#fff;font-size:.9rem;}
+.card{background:var(--card);padding:16px;border-radius:12px;margin-bottom:16px;box-shadow:0 3px 8px rgba(0,0,0,0.15);}
+label{display:block;margin-top:12px;font-weight:bold;color:var(--muted);}
+input,textarea,select{width:100%;padding:8px;border-radius:6px;border:1px solid #ccc;margin-top:4px;}
+textarea{min-height:60px;}
+.btn{padding:8px 14px;border:none;border-radius:6px;color:#fff;cursor:pointer;}
+.btn.primary{background:var(--panel);}
+.btn.accent{background:var(--accent);}
+.btn.danger{background:var(--danger);}
+.grid{display:grid;gap:12px;}
+.grid.two{grid-template-columns:1fr 1fr;}
+table{width:100%;border-collapse:collapse;margin-top:12px;}
+th,td{border-bottom:1px solid #ccc;padding:8px;text-align:left;}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>LAE Task Card App</h1>
+    <span class="pill" id="rolePill">Not signed in</span>
+  </header>
+
+  <!-- LOGIN -->
+  <div id="auth" class="card">
+    <label>Name</label>
+    <input id="nameInput" placeholder="Your name">
+    <label>Staff ID</label>
+    <input id="staffIdInput" placeholder="Staff ID">
+    <label>Role</label>
+    <select id="roleSelect">
+      <option value="LAE">LAE</option>
+      <option value="OFFICER">OFFICER</option>
+    </select>
+    <button class="btn primary" style="margin-top:12px;" onclick="signIn()">Sign In</button>
+  </div>
+
+  <!-- APP -->
+  <div id="app" style="display:none">
+    <div class="card">
+      <span id="whoPill" class="pill"></span>
+    </div>
+
+    <!-- Task Form -->
+    <div class="card">
+      <h3>Add / Edit Task</h3>
+      <div class="grid two">
+        <div>
+          <label>ATA</label>
+          <input id="f_ata">
+        </div>
+        <div>
+          <label>Task Card / AMM</label>
+          <input id="f_tc">
+        </div>
+      </div>
+      <label>Description</label>
+      <textarea id="f_desc"></textarea>
+      <label>Tools / Test Set</label>
+      <textarea id="f_tools"></textarea>
+      <label>Consumables / MSL</label>
+      <textarea id="f_cons"></textarea>
+      <label>Remarks</label>
+      <textarea id="f_rem"></textarea>
+      <div class="grid two">
+        <div>
+          <label>Duration (hours)</label>
+          <input id="f_dur" type="number" step="0.1" min="0">
+        </div>
+        <div>
+          <label>Due Date</label>
+          <input id="f_due" type="date">
+        </div>
+      </div>
+      <button class="btn accent" onclick="saveTask()" style="margin-top:12px;">Save Task</button>
+    </div>
+
+    <!-- Task List -->
+    <div class="card">
+      <h3>All Tasks</h3>
+      <div id="taskList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- State ----------
+let state = { user:null, tasks:[], editId:null };
+
+// ---------- Malaysia Date ----------
+function todayMY(){ 
+  return new Date(new Date().toLocaleString('en-MY', {timeZone:'Asia/Kuala_Lumpur'})).toISOString().split('T')[0]; 
+}
+
+// ---------- Sign In ----------
+function signIn(){
+  const name = document.getElementById('nameInput').value.trim();
+  const sid = document.getElementById('staffIdInput').value.trim();
+  const role = document.getElementById('roleSelect').value;
+  if(!name || !sid){ alert('Please enter name and staff ID'); return; }
+  state.user={name,staffId:sid,role};
+  document.getElementById('auth').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('rolePill').textContent = role;
+  document.getElementById('whoPill').textContent = `${name} • ${sid}`;
+  renderTasks();
+}
+
+// ---------- CRUD ----------
+function saveTask(){
+  const t={
+    ata:document.getElementById('f_ata').value,
+    tc:document.getElementById('f_tc').value,
+    desc:document.getElementById('f_desc').value,
+    tools:document.getElementById('f_tools').value,
+    cons:document.getElementById('f_cons').value,
+    rem:document.getElementById('f_rem').value,
+    dur:document.getElementById('f_dur').value,
+    due:document.getElementById('f_due').value || todayMY()
+  };
+  if(!t.ata || !t.tc || !t.desc || !t.dur){ alert('Fill required fields'); return; }
+  if(state.editId){
+    const i=state.tasks.findIndex(x=>x.id===state.editId);
+    if(i>-1) state.tasks[i] = {...state.tasks[i], ...t};
+  } else {
+    t.id = 'id-'+Date.now();
+    state.tasks.unshift(t);
+  }
+  resetForm(); renderTasks();
+}
+
+function resetForm(){
+  state.editId=null;
+  ['f_ata','f_tc','f_desc','f_tools','f_cons','f_rem','f_dur','f_due'].forEach(id=>document.getElementById(id).value='');
+}
+
+// ---------- Render ----------
+function renderTasks(){
+  const wrap = document.getElementById('taskList');
+  if(!state.tasks.length){ wrap.innerHTML='<p style="color:#555;">No tasks yet</p>'; return; }
+  let html='<table><thead><tr><th>ATA</th><th>Task Card</th><th>Description</th><th>Hours</th><th>Due Date</th><th></th></tr></thead><tbody>';
+  state.tasks.forEach(t=>{
+    html+=`<tr>
+      <td>${t.ata}</td>
+      <td>${t.tc}</td>
+      <td>${t.desc}</td>
+      <td>${t.dur}</td>
+      <td>${t.due}</td>
+      <td>
+        <button onclick="editTask('${t.id}')">Edit</button>
+        <button style="color:red;" onclick="deleteTask('${t.id}')">Delete</button>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+function editTask(id){
+  const t=state.tasks.find(x=>x.id===id);
+  if(!t) return;
+  state.editId=id;
+  document.getElementById('f_ata').value=t.ata;
+  document.getElementById('f_tc').value=t.tc;
+  document.getElementById('f_desc').value=t.desc;
+  document.getElementById('f_tools').value=t.tools;
+  document.getElementById('f_cons').value=t.cons;
+  document.getElementById('f_rem').value=t.rem;
+  document.getElementById('f_dur').value=t.dur;
+  document.getElementById('f_due').value=t.due;
+}
+
+function deleteTask(id){
+  if(!confirm('Delete this task?')) return;
+  state.tasks=state.tasks.filter(x=>x.id!==id);
+  renderTasks();
+}
+</script>
+</body>
+</html>
